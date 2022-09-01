@@ -2,10 +2,10 @@ package services
 
 import (
 	"fmt"
+	"github.com/c3b2a7/goproxy/utils"
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"time"
 

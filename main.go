@@ -2,14 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/snail007/goproxy/services"
+	"github.com/c3b2a7/goproxy/services"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 )
-
-const APP_VERSION = "3.0"
 
 func main() {
 	err := initConfig()

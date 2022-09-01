@@ -32,9 +32,9 @@ type CheckerItem struct {
 	FailCount    uint
 }
 
-//NewChecker args:
-//timeout : tcp timeout milliseconds ,connect to host
-//interval: recheck domain interval seconds
+// NewChecker args:
+// timeout : tcp timeout milliseconds ,connect to host
+// interval: recheck domain interval seconds
 func NewChecker(timeout int, interval int64, blockedFile, directFile string) Checker {
 	ch := Checker{
 		data:     NewConcurrentMap(),
@@ -348,6 +348,11 @@ func (req *HTTPRequest) getHTTPURL() (URL string, err error) {
 	URL = fmt.Sprintf("http://%s%s", _host, req.hostOrURL)
 	return
 }
+
+func (req HTTPRequest) GetHeader(key string) (val string, err error) {
+	return req.getHeader(key)
+}
+
 func (req *HTTPRequest) getHeader(key string) (val string, err error) {
 	key = strings.ToUpper(key)
 	lines := strings.Split(string(req.HeadBuf), "\r\n")

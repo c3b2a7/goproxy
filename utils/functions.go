@@ -146,6 +146,19 @@ func ConnectHost(hostAndPort string, timeout int) (conn net.Conn, err error) {
 	conn, err = net.DialTimeout("tcp", hostAndPort, time.Duration(timeout)*time.Millisecond)
 	return
 }
+
+func ConnectHostWithLAddr(hostAndPort string, laddr string, timeout int) (conn net.Conn, err error) {
+	d := net.Dialer{}
+	d.Timeout = time.Duration(timeout) * time.Millisecond
+	tcpAddr, err := net.ResolveTCPAddr("tcp", laddr)
+	if err != nil {
+		return nil, err
+	}
+	d.LocalAddr = tcpAddr
+	conn, err = d.Dial("tcp", hostAndPort)
+	return
+}
+
 func ListenTls(ip string, port int, certBytes, keyBytes []byte) (ln *net.Listener, err error) {
 	var cert tls.Certificate
 	cert, err = tls.X509KeyPair(certBytes, keyBytes)

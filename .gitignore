@@ -1,3 +1,2 @@
-/.idea
-/goproxy
-/go.sum
+.idea
+bin

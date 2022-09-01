@@ -2,10 +2,10 @@ package services
 
 import (
 	"fmt"
+	"github.com/c3b2a7/goproxy/utils"
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"strconv"
 )
@@ -123,7 +123,12 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			outConn = _outConn.(net.Conn)
 		}
 	} else {
-		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
+		laddr, _ := req.GetHeader("X-EIP")
+		if laddr != "" {
+			outConn, err = utils.ConnectHostWithLAddr(address, laddr+":0", *s.cfg.Timeout)
+		} else {
+			outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
+		}
 	}
 	if err != nil {
 		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)

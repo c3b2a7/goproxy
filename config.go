@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	. "github.com/c3b2a7/goproxy/constant"
+	"github.com/c3b2a7/goproxy/services"
+	"github.com/c3b2a7/goproxy/utils"
 	"io/ioutil"
 	"log"
 	"os"
-	"github.com/snail007/goproxy/services"
-	"github.com/snail007/goproxy/utils"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
@@ -35,11 +36,11 @@ func initConfig() (err error) {
 
 	//build srvice args
 	app = kingpin.New("proxy", "happy with proxy")
-	app.Author("snail").Version(APP_VERSION)
+	app.Author("snail").Version(Version)
 	args.Parent = app.Flag("parent", "parent address, such as: \"23.32.32.19:28008\"").Default("").Short('P').String()
 	args.Local = app.Flag("local", "local ip:port to listen").Short('p').Default(":33080").String()
-	certTLS := app.Flag("cert", "cert file for tls").Short('C').Default("proxy.crt").String()
-	keyTLS := app.Flag("key", "key file for tls").Short('K').Default("proxy.key").String()
+	certTLS := app.Flag("cert", "cert file for tls").Short('C').Default("").String()
+	keyTLS := app.Flag("key", "key file for tls").Short('K').Default("").String()
 
 	//########http#########
 	http := app.Command("http", "proxy on http mode")
@@ -119,15 +120,16 @@ func initConfig() (err error) {
 
 func poster() {
 	fmt.Printf(`
-		########  ########   #######  ##     ## ##    ## 
-		##     ## ##     ## ##     ##  ##   ##   ##  ##  
-		##     ## ##     ## ##     ##   ## ##     ####   
-		########  ########  ##     ##    ###       ##    
-		##        ##   ##   ##     ##   ## ##      ##    
-		##        ##    ##  ##     ##  ##   ##     ##    
-		##        ##     ##  #######  ##     ##    ##    
-		
-		v%s`+" by snail , blog : http://www.host900.com/\n\n", APP_VERSION)
+	########  ########   #######  ##     ## ##    ## 
+	##     ## ##     ## ##     ##  ##   ##   ##  ##  
+	##     ## ##     ## ##     ##   ## ##     ####   
+	########  ########  ##     ##    ###       ##    
+	##        ##   ##   ##     ##   ## ##      ##    
+	##        ##    ##  ##     ##  ##   ##     ##    
+	##        ##     ##  #######  ##     ##    ##    
+
+	Version: %s
+	Build on: %s`+"\n\n", Version, BuildTime)
 }
 func tlsBytes(cert, key string) (certBytes, keyBytes []byte) {
 	certBytes, err := ioutil.ReadFile(cert)
