@@ -10,6 +10,12 @@ import (
 	"strconv"
 )
 
+const (
+	proxyConnection    = "Proxy-Connection"
+	proxyAuthenticate  = "Proxy-Authenticate"
+	proxyAuthorization = "Proxy-Authenticate"
+)
+
 type HTTP struct {
 	outPool   utils.OutPool
 	cfg       HTTPArgs
@@ -90,18 +96,14 @@ func (s *HTTP) callback(inConn net.Conn) {
 		} else {
 			s.checker.Add(address, false, req.Method, req.URL, req.HeadBuf)
 		}
-		//var n, m uint
 		useProxy, _, _ = s.checker.IsBlocked(req.Host)
-		//log.Printf("blocked ? : %v, %s , fail:%d ,success:%d", useProxy, address, n, m)
 	}
-	log.Printf("use proxy : %v, %s", useProxy, address)
-	//os.Exit(0)
 	err = s.OutToTCP(useProxy, address, &inConn, &req)
 	if err != nil {
 		if *s.cfg.Parent == "" {
-			log.Printf("connect to %s fail, ERR:%s", address, err)
+			log.Printf("connect to %s fail, err: %s", address, err)
 		} else {
-			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, *s.cfg.Parent)
+			log.Printf("connect to %s parent %s fail, err: %s", *s.cfg.ParentType, *s.cfg.Parent, err)
 		}
 		utils.CloseConn(&inConn)
 	}
@@ -109,7 +111,6 @@ func (s *HTTP) callback(inConn net.Conn) {
 func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *utils.HTTPRequest) (err error) {
 	inAddr := (*inConn).RemoteAddr().String()
 	inLocalAddr := (*inConn).LocalAddr().String()
-	//防止死循环
 	if s.IsDeadLoop(inLocalAddr, req.Host) {
 		utils.CloseConn(inConn)
 		err = fmt.Errorf("dead loop detected , %s", req.Host)
@@ -123,7 +124,13 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			outConn = _outConn.(net.Conn)
 		}
 	} else {
-		laddr, _ := req.GetHeader("X-EIP")
+		var laddr string
+		if *s.cfg.MagicHeader != "" {
+			if laddr, _ = req.GetHeader(*s.cfg.MagicHeader); laddr != "" {
+				req.DelHeader(*s.cfg.MagicHeader)
+				laddr = s.cfg.Mapping.Get(laddr)
+			}
+		}
 		if laddr != "" {
 			outConn, err = utils.ConnectHostWithLAddr(address, laddr+":0", *s.cfg.Timeout)
 		} else {
@@ -131,8 +138,6 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		}
 	}
 	if err != nil {
-		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)
-		utils.CloseConn(inConn)
 		return
 	}
 
@@ -142,9 +147,12 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	if req.IsHTTPS() && !useProxy {
 		req.HTTPSReply()
 	} else {
+		req.DelHeader(proxyConnection)
+		req.DelHeader(proxyAuthenticate)
+		req.DelHeader(proxyAuthorization)
 		outConn.Write(req.HeadBuf)
 	}
-	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
+	utils.IoBind(*inConn, outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)

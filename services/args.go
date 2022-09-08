@@ -1,7 +1,6 @@
 package services
 
-// tcp := app.Command("tcp", "proxy on tcp mode")
-// t := tcp.Flag("tcp-timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Default("2000").Int()
+import "github.com/c3b2a7/goproxy/utils"
 
 const (
 	TYPE_TCP     = "tcp"
@@ -16,6 +15,7 @@ const (
 type Args struct {
 	Local     *string
 	Parent    *string
+	Mapping   utils.Mapping
 	CertBytes []byte
 	KeyBytes  []byte
 }
@@ -58,6 +58,7 @@ type HTTPArgs struct {
 	Timeout             *int
 	PoolSize            *int
 	CheckParentInterval *int
+	MagicHeader         *string
 }
 type UDPArgs struct {
 	Args

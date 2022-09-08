@@ -32,6 +32,21 @@ type CheckerItem struct {
 	FailCount    uint
 }
 
+type Mapping struct {
+	m map[string]string
+}
+
+func NewMapping(m map[string]string) Mapping {
+	return Mapping{m}
+}
+
+func (m Mapping) Get(key string) string {
+	if val, ok := m.m[key]; ok {
+		return val
+	}
+	return ""
+}
+
 // NewChecker args:
 // timeout : tcp timeout milliseconds ,connect to host
 // interval: recheck domain interval seconds
@@ -267,7 +282,7 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 	req.Method = strings.ToUpper(req.Method)
 	req.isBasicAuth = isBasicAuth
 	req.basicAuth = basicAuth
-	log.Printf("%s:%s", req.Method, req.hostOrURL)
+	log.Printf("%s: %s", req.Method, req.hostOrURL)
 
 	if req.IsHTTPS() {
 		err = req.HTTPS()
@@ -306,15 +321,12 @@ func (req *HTTPRequest) IsHTTPS() bool {
 }
 
 func (req *HTTPRequest) BasicAuth() (err error) {
-
-	//log.Printf("request :%s", string(b[:n]))
-	authorization, err := req.getHeader("Authorization")
+	authorization, err := req.GetHeader("Authorization")
 	if err != nil {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"\"\r\n\r\nUnauthorized")
 		CloseConn(req.conn)
 		return
 	}
-	//log.Printf("Authorization:%s", authorization)
 	basic := strings.Fields(authorization)
 	if len(basic) != 2 {
 		err = fmt.Errorf("authorization data error,ERR:%s", authorization)
@@ -328,7 +340,6 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		return
 	}
 	authOk := (*req.basicAuth).Check(string(user))
-	//log.Printf("auth %s,%v", string(user), authOk)
 	if !authOk {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")
 		CloseConn(req.conn)
@@ -341,7 +352,7 @@ func (req *HTTPRequest) getHTTPURL() (URL string, err error) {
 	if !strings.HasPrefix(req.hostOrURL, "/") {
 		return req.hostOrURL, nil
 	}
-	_host, err := req.getHeader("host")
+	_host, err := req.GetHeader("host")
 	if err != nil {
 		return
 	}
@@ -349,11 +360,7 @@ func (req *HTTPRequest) getHTTPURL() (URL string, err error) {
 	return
 }
 
-func (req HTTPRequest) GetHeader(key string) (val string, err error) {
-	return req.getHeader(key)
-}
-
-func (req *HTTPRequest) getHeader(key string) (val string, err error) {
+func (req *HTTPRequest) GetHeader(key string) (val string, err error) {
 	key = strings.ToUpper(key)
 	lines := strings.Split(string(req.HeadBuf), "\r\n")
 	for _, line := range lines {
@@ -371,8 +378,23 @@ func (req *HTTPRequest) getHeader(key string) (val string, err error) {
 	return
 }
 
+func (req *HTTPRequest) DelHeader(key string) bool {
+	key = strings.ToUpper(key)
+	lines := strings.Split(string(req.HeadBuf), "\r\n")
+	for _, line := range lines {
+		kv := strings.SplitN(strings.Trim(line, "\r\n "), ":", 2)
+		if len(kv) == 2 && key == strings.ToUpper(strings.Trim(kv[0], " ")) {
+			before, after, found := bytes.Cut(req.HeadBuf, append([]byte(line), []byte("\r\n")...))
+			if found {
+				req.HeadBuf = append(before, after...)
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (req *HTTPRequest) addPortIfNot() (newHost string) {
-	//newHost = req.Host
 	port := "80"
 	if req.IsHTTPS() {
 		port = "443"

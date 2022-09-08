@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	. "github.com/c3b2a7/goproxy/constant"
 	"github.com/c3b2a7/goproxy/services"
 	"github.com/c3b2a7/goproxy/utils"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -56,6 +56,8 @@ func initConfig() (err error) {
 	httpArgs.Auth = http.Flag("auth", "http basic auth username and password, mutiple user repeat -a ,such as: -a user1:pass1 -a user2:pass2").Short('a').Strings()
 	httpArgs.PoolSize = http.Flag("pool-size", "conn pool size , which connect to parent proxy, zero: means turn off pool").Short('L').Default("20").Int()
 	httpArgs.CheckParentInterval = http.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
+	httpArgs.MagicHeader = http.Flag("magic-header", "used to determine which iface to use to connect to target").Short('h').Default("").String()
+	mappingFile := http.Flag("mapping-file", "used to mapping external IP to internal IP in nat environment").Short('m').Default("./mapping.json").String()
 
 	//########tcp#########
 	tcp := app.Command("tcp", "proxy on tcp mode")
@@ -92,6 +94,9 @@ func initConfig() (err error) {
 
 	if *certTLS != "" && *keyTLS != "" {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
+	}
+	if mapping, err := initMapping(mappingFile); err == nil {
+		args.Mapping = utils.NewMapping(mapping)
 	}
 
 	//common args
@@ -132,14 +137,28 @@ func poster() {
 	Build on: %s`+"\n\n", Version, BuildTime)
 }
 func tlsBytes(cert, key string) (certBytes, keyBytes []byte) {
-	certBytes, err := ioutil.ReadFile(cert)
+	certBytes, err := os.ReadFile(cert)
 	if err != nil {
 		log.Fatalf("err : %s", err)
 		return
 	}
-	keyBytes, err = ioutil.ReadFile(key)
+	keyBytes, err = os.ReadFile(key)
 	if err != nil {
 		log.Fatalf("err : %s", err)
+		return
+	}
+	return
+}
+func initMapping(path *string) (mapping map[string]string, err error) {
+	if _, err = os.Stat(*path); os.IsNotExist(err) {
+		return
+	}
+	data, err := os.ReadFile(*path)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &mapping)
+	if err != nil {
 		return
 	}
 	return
