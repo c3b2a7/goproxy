@@ -374,7 +374,7 @@ func (req *HTTPRequest) GetHeader(key string) (val string, err error) {
 			}
 		}
 	}
-	err = fmt.Errorf("can not find HOST header")
+	err = fmt.Errorf("can not find header: %s", key)
 	return
 }
 
