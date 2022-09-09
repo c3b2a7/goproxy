@@ -47,6 +47,12 @@ func (m Mapping) Get(key string) string {
 	return ""
 }
 
+func (m Mapping) Log() {
+	for k, v := range m.m {
+		log.Printf("detect mapping: %s -> %s", k, v)
+	}
+}
+
 // NewChecker args:
 // timeout : tcp timeout milliseconds ,connect to host
 // interval: recheck domain interval seconds

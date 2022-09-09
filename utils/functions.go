@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -148,15 +149,16 @@ func ConnectHost(hostAndPort string, timeout int) (conn net.Conn, err error) {
 }
 
 func ConnectHostWithLAddr(hostAndPort string, laddr string, timeout int) (conn net.Conn, err error) {
-	d := net.Dialer{}
-	d.Timeout = time.Duration(timeout) * time.Millisecond
-	tcpAddr, err := net.ResolveTCPAddr("tcp", laddr)
-	if err != nil {
-		return nil, err
+	dialer := newDialer(laddr, time.Duration(timeout)*time.Millisecond)
+	return dialer.Dial("tcp", hostAndPort)
+}
+
+func newDialer(laddr string, timeout time.Duration) *net.Dialer {
+	localAddr, _ := net.ResolveTCPAddr("tcp", laddr)
+	return &net.Dialer{
+		Timeout:   timeout,
+		LocalAddr: localAddr,
 	}
-	d.LocalAddr = tcpAddr
-	conn, err = d.Dial("tcp", hostAndPort)
-	return
 }
 
 func ListenTls(ip string, port int, certBytes, keyBytes []byte) (ln *net.Listener, err error) {
@@ -318,59 +320,39 @@ func ReadUDPPacket(conn *net.Conn) (srcAddr string, packet []byte, err error) {
 	return
 }
 
-// type sockaddr struct {
-// 	family uint16
-// 	data   [14]byte
-// }
-
-// const SO_ORIGINAL_DST = 80
-
-// realServerAddress returns an intercepted connection's original destination.
-// func realServerAddress(conn *net.Conn) (string, error) {
-// 	tcpConn, ok := (*conn).(*net.TCPConn)
-// 	if !ok {
-// 		return "", errors.New("not a TCPConn")
-// 	}
-
-// 	file, err := tcpConn.File()
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	// To avoid potential problems from making the socket non-blocking.
-// 	tcpConn.Close()
-// 	*conn, err = net.FileConn(file)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	defer file.Close()
-// 	fd := file.Fd()
-
-// 	var addr sockaddr
-// 	size := uint32(unsafe.Sizeof(addr))
-// 	err = getsockopt(int(fd), syscall.SOL_IP, SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&addr)), &size)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	var ip net.IP
-// 	switch addr.family {
-// 	case syscall.AF_INET:
-// 		ip = addr.data[2:6]
-// 	default:
-// 		return "", errors.New("unrecognized address family")
-// 	}
-
-// 	port := int(addr.data[0])<<8 + int(addr.data[1])
-
-// 	return net.JoinHostPort(ip.String(), strconv.Itoa(port)), nil
-// }
-
-// func getsockopt(s int, level int, name int, val uintptr, vallen *uint32) (err error) {
-// 	_, _, e1 := syscall.Syscall6(syscall.SYS_GETSOCKOPT, uintptr(s), uintptr(level), uintptr(name), uintptr(val), uintptr(unsafe.Pointer(vallen)), 0)
-// 	if e1 != 0 {
-// 		err = e1
-// 	}
-// 	return
-// }
+func ResolveMapping() map[string]string {
+	addrs, err := GetAllInterfaceAddr()
+	if err != nil {
+		return nil
+	}
+	ret := make(map[string]string)
+	buf := make([]byte, 64)
+	for _, addr := range addrs {
+		in := addr.String()
+		dialer := newDialer(in+":0", time.Duration(1000)*time.Millisecond)
+		log.Printf("local iface addr: %s, dialer addr: %s", in, dialer.LocalAddr)
+		transport, _ := http.DefaultTransport.(*http.Transport)
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dialer.DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			log.Printf("%s -> %s", conn.LocalAddr(), conn.RemoteAddr())
+			return conn, err
+		}
+		transport.DisableKeepAlives = true
+		request, _ := http.NewRequest("GET", "http://api.ip.sb/ip", nil)
+		response, err := transport.RoundTrip(request)
+		if err == nil && response.StatusCode == 200 {
+			len, _ := response.Body.Read(buf[:])
+			ret[strings.Trim(string(buf[:len]), "\r\n ")] = in
+		} else {
+			if err != nil {
+				log.Printf("detect mapping failed,  err %s", err)
+			} else {
+				log.Printf("detect mapping failed, response status: %s", response.Status)
+			}
+		}
+	}
+	return ret
+}

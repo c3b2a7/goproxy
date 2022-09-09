@@ -6,10 +6,9 @@ import (
 	. "github.com/c3b2a7/goproxy/constant"
 	"github.com/c3b2a7/goproxy/services"
 	"github.com/c3b2a7/goproxy/utils"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	"log"
 	"os"
-
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -58,6 +57,7 @@ func initConfig() (err error) {
 	httpArgs.CheckParentInterval = http.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
 	httpArgs.MagicHeader = http.Flag("magic-header", "used to determine which iface to use to connect to target").Short('h').Default("").String()
 	mappingFile := http.Flag("mapping-file", "used to mapping external IP to internal IP in nat environment").Short('m').Default("./mapping.json").String()
+	autoMapping := http.Flag("auto-mapping", "mapping external IP to internal IP automatically").Default("false").Bool()
 
 	//########tcp#########
 	tcp := app.Command("tcp", "proxy on tcp mode")
@@ -95,9 +95,15 @@ func initConfig() (err error) {
 	if *certTLS != "" && *keyTLS != "" {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
 	}
+	if *autoMapping {
+		args.Mapping = utils.NewMapping(utils.ResolveMapping())
+	}
 	if mapping, err := initMapping(mappingFile); err == nil {
 		args.Mapping = utils.NewMapping(mapping)
 	}
+	defer func() {
+		args.Mapping.Log()
+	}()
 
 	//common args
 	httpArgs.Args = args
