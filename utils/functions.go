@@ -3,7 +3,6 @@ package utils
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -326,36 +325,16 @@ func ResolveMapping(consume func(k, v string)) error {
 	if err != nil {
 		return err
 	}
-	buf := make([]byte, 64)
 	for _, addr := range addrs {
-		if addr.IsLoopback() {
+		if !(addr.IsGlobalUnicast() && addr.IsPrivate()) {
 			continue
 		}
 		laddr := addr.String()
 		go func() {
-			dialer := newDialer(laddr+":0", time.Duration(1000)*time.Millisecond)
-			log.Printf("local iface addr: %s, dialer addr: %s", laddr, dialer.LocalAddr)
-			transport, _ := http.DefaultTransport.(*http.Transport)
-			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-				conn, err := dialer.DialContext(ctx, network, addr)
-				if err != nil {
-					return nil, err
-				}
-				log.Printf("%s -> %s", conn.LocalAddr(), conn.RemoteAddr())
-				return conn, err
-			}
-			transport.DisableKeepAlives = true
-			request, _ := http.NewRequest("GET", "http://api.ip.sb/ip", nil)
-			response, err := transport.RoundTrip(request)
-			if err == nil && response.StatusCode == 200 {
-				len, _ := response.Body.Read(buf[:])
-				consume(strings.Trim(string(buf[:len]), "\r\n "), laddr)
+			if ip, err := requestIpInfo(laddr); err == nil {
+				consume(ip, laddr)
 			} else {
-				if err != nil {
-					log.Printf("detect mapping failed,  err %s", err)
-				} else {
-					log.Printf("detect mapping failed, response status: %s", response.Status)
-				}
+				log.Printf("detect mapping failed, laddr: %s err: %s", laddr, err)
 			}
 		}()
 	}
@@ -391,28 +370,47 @@ func StartMonitor(mapping Mapping) {
 			mapping.Consume(func(k, v string) {
 				m[v] = k
 			})
-			buf := make([]byte, 64)
 			for _, addr := range addrs {
-				if addr.IsLoopback() {
+				if !(addr.IsGlobalUnicast() && addr.IsPrivate()) {
 					continue
 				}
 				laddr := addr.String()
-				dialer := newDialer(laddr+":0", time.Duration(1000)*time.Millisecond)
-				transport, _ := http.DefaultTransport.(*http.Transport)
-				transport.DialContext = dialer.DialContext
-				transport.DisableKeepAlives = true
-				request, _ := http.NewRequest("GET", "http://api.ip.sb/ip", nil)
-				response, err := transport.RoundTrip(request)
-				if err == nil && response.StatusCode == 200 {
-					len, _ := response.Body.Read(buf[:])
-					val := strings.Trim(string(buf[:len]), "\r\n ")
+				if newVal, err := requestIpInfo(laddr); err == nil {
 					oldVal, ok := m[laddr]
-					if !ok || oldVal != val {
-						log.Printf("detect new mapping: %s -> %s", laddr, val)
-						mapping.Put(val, laddr)
+					if newVal != "" && (!ok || oldVal != newVal) {
+						log.Printf("detect new mapping: %s -> %s", laddr, newVal)
+						mapping.Put(newVal, laddr)
 					}
 				}
 			}
 		}
 	}()
+}
+
+func requestIpInfo(laddr string) (string, error) {
+	dialer := newDialer(laddr+":0", time.Duration(3000)*time.Millisecond)
+	transport, _ := http.DefaultTransport.(*http.Transport)
+	transport.DialContext = dialer.DialContext
+	transport.DisableKeepAlives = true
+	request, err := http.NewRequest("GET", "https://api.ip.sb/jsonip", nil)
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36")
+	if err != nil {
+		return "", err
+	}
+	response, err := transport.RoundTrip(request)
+	if err != nil {
+		return "", err
+	}
+	if response.StatusCode != 200 {
+		return "", fmt.Errorf("failed to request ip resovler, response status: %s", response.Status)
+	}
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+	var ipInfo struct {
+		Ip string `json:"ip"`
+	}
+	json.Unmarshal(data, &ipInfo)
+	return ipInfo.Ip, nil
 }
