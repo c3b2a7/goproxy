@@ -46,19 +46,22 @@ type TCPArgs struct {
 
 type HTTPArgs struct {
 	Args
-	Always              *bool
-	HTTPTimeout         *int
-	Interval            *int
-	Blocked             *string
-	Direct              *string
-	AuthFile            *string
-	Auth                *[]string
-	ParentType          *string
-	LocalType           *string
-	Timeout             *int
-	PoolSize            *int
-	CheckParentInterval *int
-	MagicHeader         *string
+	Always               *bool
+	HTTPTimeout          *int
+	Interval             *int
+	Blocked              *string
+	Direct               *string
+	AuthFile             *string
+	Auth                 *[]string
+	ParentType           *string
+	LocalType            *string
+	Timeout              *int
+	PoolSize             *int
+	CheckParentInterval  *int
+	MagicHeader          *string
+	MappingFile          *string
+	AutoMapping          *bool
+	CheckMappingInterval *int
 }
 type UDPArgs struct {
 	Args

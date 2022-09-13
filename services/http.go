@@ -37,6 +37,24 @@ func (s *HTTP) InitService() {
 		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
+
+func (s *HTTP) InitMapping() {
+	s.cfg.Mapping = utils.NewInMemoryMapping()
+	logMapping := func(k, v string) {
+		s.cfg.Mapping.Put(k, v)
+		log.Printf("detect mapping: %s -> %s", k, v)
+	}
+	if *s.cfg.AutoMapping {
+		utils.ResolveMapping(logMapping)
+		if *s.cfg.CheckMappingInterval > 0 {
+			utils.StartMonitor(s.cfg.Mapping, *s.cfg.CheckMappingInterval)
+		}
+	}
+	if *s.cfg.MappingFile != "" {
+		utils.UnmarshalMapping(*s.cfg.MappingFile, logMapping)
+	}
+}
+
 func (s *HTTP) StopService() {
 	if s.outPool.Pool != nil {
 		s.outPool.Pool.ReleaseAll()
@@ -47,6 +65,9 @@ func (s *HTTP) Start(args interface{}) (err error) {
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
 		s.InitOutConnPool()
+	}
+	if *s.cfg.AutoMapping || *s.cfg.MappingFile != "" {
+		s.InitMapping()
 	}
 
 	s.InitService()

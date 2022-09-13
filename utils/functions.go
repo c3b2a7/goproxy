@@ -341,12 +341,12 @@ func ResolveMapping(consume func(k, v string)) error {
 	return nil
 }
 
-func UnmarshalMapping(path *string, consume func(k, v string)) (err error) {
-	if _, err = os.Stat(*path); os.IsNotExist(err) {
+func UnmarshalMapping(path string, consume func(k, v string)) (err error) {
+	if _, err = os.Stat(path); os.IsNotExist(err) {
 		return
 	}
 	var data []byte
-	data, err = os.ReadFile(*path)
+	data, err = os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -361,10 +361,10 @@ func UnmarshalMapping(path *string, consume func(k, v string)) (err error) {
 	return
 }
 
-func StartMonitor(mapping Mapping) {
+func StartMonitor(mapping Mapping, checkInterval int) {
 	go func() {
 		for {
-			time.Sleep(time.Duration(5) * time.Second)
+			time.Sleep(time.Duration(checkInterval) * time.Second)
 			addrs, _ := GetAllInterfaceAddr()
 			m := make(map[string]string)
 			mapping.Consume(func(k, v string) {
