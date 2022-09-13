@@ -55,8 +55,8 @@ func initConfig() (err error) {
 	httpArgs.PoolSize = http.Flag("pool-size", "conn pool size , which connect to parent proxy, zero: means turn off pool").Short('L').Default("20").Int()
 	httpArgs.CheckParentInterval = http.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
 	httpArgs.MagicHeader = http.Flag("magic-header", "used to determine which iface to use to connect to target").Short('h').Default("").String()
-	mappingFile := http.Flag("mapping-file", "used to mapping external IP to internal IP in nat environment").Short('m').Default("./mapping.json").String()
-	autoMapping := http.Flag("auto-mapping", "mapping external IP to internal IP automatically").Default("false").Bool()
+	mappingFile := http.Flag("mapping-file", "used to mapping external IP to internal IP in nat environment").Short('m').Default("").String()
+	autoMapping := http.Flag("auto-mapping", "mapping external IP to internal IP automatically").Short('M').Default("false").Bool()
 
 	//########tcp#########
 	tcp := app.Command("tcp", "proxy on tcp mode")
@@ -95,16 +95,17 @@ func initConfig() (err error) {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
 	}
 	args.Mapping = utils.NewInMemoryMapping()
+	logMapping := func(k, v string) {
+		args.Mapping.Put(k, v)
+		log.Printf("detect mapping: %s -> %s", k, v)
+	}
 	if *autoMapping {
-		utils.ResolveMapping(args.Mapping.Put)
+		utils.ResolveMapping(logMapping)
 		utils.StartMonitor(args.Mapping)
 	}
-	utils.UnmarshalMapping(mappingFile, args.Mapping.Put)
-	defer func() {
-		args.Mapping.Consume(func(k, v string) {
-			log.Printf("detect mapping: %s -> %s", k, v)
-		})
-	}()
+	if *mappingFile != "" {
+		utils.UnmarshalMapping(mappingFile, logMapping)
+	}
 
 	//common args
 	httpArgs.Args = args
