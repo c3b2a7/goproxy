@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	. "github.com/c3b2a7/goproxy/constant"
 	"github.com/c3b2a7/goproxy/services"
@@ -95,14 +94,16 @@ func initConfig() (err error) {
 	if *certTLS != "" && *keyTLS != "" {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
 	}
+	args.Mapping = utils.NewInMemoryMapping()
 	if *autoMapping {
-		args.Mapping = utils.NewMapping(utils.ResolveMapping())
+		utils.ResolveMapping(args.Mapping.Put)
+		utils.StartMonitor(args.Mapping)
 	}
-	if mapping, err := initMapping(mappingFile); err == nil {
-		args.Mapping = utils.NewMapping(mapping)
-	}
+	utils.UnmarshalMapping(mappingFile, args.Mapping.Put)
 	defer func() {
-		args.Mapping.Log()
+		args.Mapping.Consume(func(k, v string) {
+			log.Printf("detect mapping: %s -> %s", k, v)
+		})
 	}()
 
 	//common args
@@ -151,20 +152,6 @@ func tlsBytes(cert, key string) (certBytes, keyBytes []byte) {
 	keyBytes, err = os.ReadFile(key)
 	if err != nil {
 		log.Fatalf("err : %s", err)
-		return
-	}
-	return
-}
-func initMapping(path *string) (mapping map[string]string, err error) {
-	if _, err = os.Stat(*path); os.IsNotExist(err) {
-		return
-	}
-	data, err := os.ReadFile(*path)
-	if err != nil {
-		return
-	}
-	err = json.Unmarshal(data, &mapping)
-	if err != nil {
 		return
 	}
 	return

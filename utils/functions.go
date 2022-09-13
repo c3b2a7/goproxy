@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -320,39 +321,98 @@ func ReadUDPPacket(conn *net.Conn) (srcAddr string, packet []byte, err error) {
 	return
 }
 
-func ResolveMapping() map[string]string {
+func ResolveMapping(consume func(k, v string)) error {
 	addrs, err := GetAllInterfaceAddr()
 	if err != nil {
-		return nil
+		return err
 	}
-	ret := make(map[string]string)
 	buf := make([]byte, 64)
 	for _, addr := range addrs {
-		in := addr.String()
-		dialer := newDialer(in+":0", time.Duration(1000)*time.Millisecond)
-		log.Printf("local iface addr: %s, dialer addr: %s", in, dialer.LocalAddr)
-		transport, _ := http.DefaultTransport.(*http.Transport)
-		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := dialer.DialContext(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			log.Printf("%s -> %s", conn.LocalAddr(), conn.RemoteAddr())
-			return conn, err
+		if addr.IsLoopback() {
+			continue
 		}
-		transport.DisableKeepAlives = true
-		request, _ := http.NewRequest("GET", "http://api.ip.sb/ip", nil)
-		response, err := transport.RoundTrip(request)
-		if err == nil && response.StatusCode == 200 {
-			len, _ := response.Body.Read(buf[:])
-			ret[strings.Trim(string(buf[:len]), "\r\n ")] = in
-		} else {
-			if err != nil {
-				log.Printf("detect mapping failed,  err %s", err)
+		laddr := addr.String()
+		go func() {
+			dialer := newDialer(laddr+":0", time.Duration(1000)*time.Millisecond)
+			log.Printf("local iface addr: %s, dialer addr: %s", laddr, dialer.LocalAddr)
+			transport, _ := http.DefaultTransport.(*http.Transport)
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				conn, err := dialer.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				log.Printf("%s -> %s", conn.LocalAddr(), conn.RemoteAddr())
+				return conn, err
+			}
+			transport.DisableKeepAlives = true
+			request, _ := http.NewRequest("GET", "http://api.ip.sb/ip", nil)
+			response, err := transport.RoundTrip(request)
+			if err == nil && response.StatusCode == 200 {
+				len, _ := response.Body.Read(buf[:])
+				consume(strings.Trim(string(buf[:len]), "\r\n "), laddr)
 			} else {
-				log.Printf("detect mapping failed, response status: %s", response.Status)
+				if err != nil {
+					log.Printf("detect mapping failed,  err %s", err)
+				} else {
+					log.Printf("detect mapping failed, response status: %s", response.Status)
+				}
+			}
+		}()
+	}
+	return nil
+}
+
+func UnmarshalMapping(path *string, consume func(k, v string)) (err error) {
+	if _, err = os.Stat(*path); os.IsNotExist(err) {
+		return
+	}
+	var data []byte
+	data, err = os.ReadFile(*path)
+	if err != nil {
+		return
+	}
+	m := make(map[string]string)
+	err = json.Unmarshal(data, &m)
+	if err != nil {
+		return
+	}
+	for k, v := range m {
+		consume(k, v)
+	}
+	return
+}
+
+func StartMonitor(mapping Mapping) {
+	go func() {
+		for {
+			time.Sleep(time.Duration(5) * time.Second)
+			addrs, _ := GetAllInterfaceAddr()
+			m := make(map[string]string)
+			mapping.Consume(func(k, v string) {
+				m[v] = k
+			})
+			buf := make([]byte, 64)
+			for _, addr := range addrs {
+				if addr.IsLoopback() {
+					continue
+				}
+				laddr := addr.String()
+				dialer := newDialer(laddr+":0", time.Duration(1000)*time.Millisecond)
+				transport, _ := http.DefaultTransport.(*http.Transport)
+				transport.DialContext = dialer.DialContext
+				transport.DisableKeepAlives = true
+				request, _ := http.NewRequest("GET", "http://api.ip.sb/ip", nil)
+				response, err := transport.RoundTrip(request)
+				if err == nil && response.StatusCode == 200 {
+					len, _ := response.Body.Read(buf[:])
+					val := strings.Trim(string(buf[:len]), "\r\n ")
+					oldVal, ok := m[laddr]
+					if !ok || oldVal != val {
+						log.Printf("detect new mapping: %s -> %s", laddr, val)
+						mapping.Put(val, laddr)
+					}
+				}
 			}
 		}
-	}
-	return ret
+	}()
 }

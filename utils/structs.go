@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,27 +31,6 @@ type CheckerItem struct {
 	Data         []byte
 	SuccessCount uint
 	FailCount    uint
-}
-
-type Mapping struct {
-	m map[string]string
-}
-
-func NewMapping(m map[string]string) Mapping {
-	return Mapping{m}
-}
-
-func (m Mapping) Get(key string) string {
-	if val, ok := m.m[key]; ok {
-		return val
-	}
-	return ""
-}
-
-func (m Mapping) Log() {
-	for k, v := range m.m {
-		log.Printf("detect mapping: %s -> %s", k, v)
-	}
 }
 
 // NewChecker args:
@@ -496,4 +476,42 @@ func (op *OutPool) initPoolDeamon() {
 			}
 		}
 	}()
+}
+
+type Mapping interface {
+	Get(string) string
+	Put(string, string)
+	Consume(func(k, v string))
+}
+
+type inMemoryMapping struct {
+	mapping map[string]string
+	sync.RWMutex
+}
+
+func NewInMemoryMapping() Mapping {
+	return &inMemoryMapping{
+		mapping: make(map[string]string),
+	}
+}
+
+func (m *inMemoryMapping) Get(key string) string {
+	m.RLock()
+	defer m.RUnlock()
+	if val, ok := m.mapping[key]; ok {
+		return val
+	}
+	return ""
+}
+
+func (m *inMemoryMapping) Put(key string, val string) {
+	m.Lock()
+	defer m.Unlock()
+	m.mapping[key] = val
+}
+
+func (m *inMemoryMapping) Consume(f func(k, v string)) {
+	for k, v := range m.mapping {
+		f(k, v)
+	}
 }

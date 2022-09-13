@@ -1,6 +1,6 @@
 package services
 
-import "github.com/c3b2a7/goproxy/utils"
+import . "github.com/c3b2a7/goproxy/utils"
 
 const (
 	TYPE_TCP     = "tcp"
@@ -15,7 +15,7 @@ const (
 type Args struct {
 	Local     *string
 	Parent    *string
-	Mapping   utils.Mapping
+	Mapping   Mapping
 	CertBytes []byte
 	KeyBytes  []byte
 }
