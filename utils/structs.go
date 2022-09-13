@@ -310,6 +310,10 @@ func (req *HTTPRequest) HTTP() (err error) {
 		req.Host = u.Host
 		req.addPortIfNot()
 	}
+	cut := []byte("http://" + req.Host)
+	if index := bytes.Index(req.HeadBuf, cut); index != -1 {
+		req.HeadBuf = append(req.HeadBuf[:index], req.HeadBuf[index+len(cut):]...)
+	}
 	return
 }
 func (req *HTTPRequest) HTTPS() (err error) {

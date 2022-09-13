@@ -19,12 +19,7 @@ func main() {
 func Clean(s *services.Service) {
 	signalChan := make(chan os.Signal, 1)
 	cleanupDone := make(chan bool)
-	signal.Notify(signalChan,
-		os.Interrupt,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		for _ = range signalChan {
 			fmt.Println("\nReceived an interrupt, stopping services...")
