@@ -233,7 +233,7 @@ func (s *HTTP) IsDeadLoop(inLocalAddr string, host string) bool {
 		outIPs, err = net.LookupIP(outDomain)
 		if err == nil {
 			for _, ip := range outIPs {
-				if ip.String() == inIP {
+				if ip.String() == inIP || s.cfg.Mapping.Get(ip.String()) != "" {
 					return true
 				}
 			}
