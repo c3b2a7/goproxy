@@ -8,6 +8,7 @@ import (
 	"net"
 	"runtime/debug"
 	"strconv"
+	"time"
 )
 
 const (
@@ -17,16 +18,18 @@ const (
 )
 
 type HTTP struct {
-	outPool   utils.OutPool
-	cfg       HTTPArgs
-	checker   utils.Checker
-	basicAuth utils.BasicAuth
+	cfg        HTTPArgs
+	outPool    utils.OutPool
+	checker    utils.Checker
+	basicAuth  utils.BasicAuth
+	ipResolver utils.IPResolver
+	mapping    utils.Mapping
 }
 
 func NewHTTP() Service {
 	return &HTTP{
-		outPool:   utils.OutPool{},
 		cfg:       HTTPArgs{},
+		outPool:   utils.OutPool{},
 		checker:   utils.Checker{},
 		basicAuth: utils.BasicAuth{},
 	}
@@ -39,15 +42,16 @@ func (s *HTTP) InitService() {
 }
 
 func (s *HTTP) InitMapping() {
-	s.cfg.Mapping = utils.NewInMemoryMapping()
+	s.mapping = utils.NewInMemoryMapping()
+	s.ipResolver, _ = utils.NewFallBackIPResolver(*s.cfg.IPResolver...)
 	logMapping := func(k, v string) {
-		s.cfg.Mapping.Put(k, v)
+		s.mapping.Put(k, v)
 		log.Printf("detect mapping: %s -> %s", k, v)
 	}
 	if *s.cfg.AutoMapping {
-		utils.ResolveMapping(logMapping)
-		if *s.cfg.CheckMappingInterval > 0 {
-			utils.StartMonitor(s.cfg.Mapping, *s.cfg.CheckMappingInterval)
+		utils.ResolveMapping(s.ipResolver, logMapping)
+		if interval := *s.cfg.CheckMappingInterval; interval > 0 {
+			utils.StartMonitor(s.ipResolver, s.mapping, time.Duration(interval)*time.Second)
 		}
 	}
 	if *s.cfg.MappingFile != "" {
@@ -149,11 +153,12 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		if *s.cfg.MagicHeader != "" {
 			if laddr, _ = req.GetHeader(*s.cfg.MagicHeader); laddr != "" {
 				req.DelHeader(*s.cfg.MagicHeader)
-				laddr = s.cfg.Mapping.Get(laddr)
+				laddr = s.mapping.Get(laddr)
 			}
 		}
 		if laddr != "" {
-			outConn, err = utils.ConnectHostWithLAddr(address, laddr+":0", *s.cfg.Timeout)
+			timeout := time.Duration(*s.cfg.Timeout) * time.Millisecond
+			outConn, err = utils.ConnectHostWithLAddr(address, laddr+":0", timeout)
 		} else {
 			outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 		}
@@ -233,7 +238,7 @@ func (s *HTTP) IsDeadLoop(inLocalAddr string, host string) bool {
 		outIPs, err = net.LookupIP(outDomain)
 		if err == nil {
 			for _, ip := range outIPs {
-				if ip.String() == inIP || s.cfg.Mapping.Get(ip.String()) != "" {
+				if ip.String() == inIP || s.mapping.Get(ip.String()) != "" {
 					return true
 				}
 			}

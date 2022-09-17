@@ -1,7 +1,5 @@
 package services
 
-import . "github.com/c3b2a7/goproxy/utils"
-
 const (
 	TYPE_TCP     = "tcp"
 	TYPE_UDP     = "udp"
@@ -15,7 +13,6 @@ const (
 type Args struct {
 	Local     *string
 	Parent    *string
-	Mapping   Mapping
 	CertBytes []byte
 	KeyBytes  []byte
 }
@@ -62,6 +59,7 @@ type HTTPArgs struct {
 	MappingFile          *string
 	AutoMapping          *bool
 	CheckMappingInterval *int
+	IPResolver           *[]string
 }
 type UDPArgs struct {
 	Args

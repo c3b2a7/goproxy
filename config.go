@@ -8,6 +8,7 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	"log"
 	"os"
+	"strings"
 )
 
 var (
@@ -42,7 +43,7 @@ func initConfig() (err error) {
 
 	//########http#########
 	http := app.Command("http", "proxy on http mode")
-	httpArgs.LocalType = http.Flag("local-type", "parent protocol type <tls|tcp>").Default("tcp").Short('t').Enum("tls", "tcp")
+	httpArgs.LocalType = http.Flag("local-type", "local protocol type <tls|tcp>").Default("tcp").Short('t').Enum("tls", "tcp")
 	httpArgs.ParentType = http.Flag("parent-type", "parent protocol type <tls|tcp>").Short('T').Enum("tls", "tcp")
 	httpArgs.Always = http.Flag("always", "always use parent proxy").Default("false").Bool()
 	httpArgs.Timeout = http.Flag("timeout", "tcp timeout milliseconds when connect to real server or parent proxy").Default("2000").Int()
@@ -51,13 +52,14 @@ func initConfig() (err error) {
 	httpArgs.Blocked = http.Flag("blocked", "blocked domain file , one domain each line").Default("blocked").Short('b').String()
 	httpArgs.Direct = http.Flag("direct", "direct domain file , one domain each line").Default("direct").Short('d').String()
 	httpArgs.AuthFile = http.Flag("auth-file", "http basic auth file,\"username:password\" each line in file").Short('F').String()
-	httpArgs.Auth = http.Flag("auth", "http basic auth username and password, mutiple user repeat -a ,such as: -a user1:pass1 -a user2:pass2").Short('a').Strings()
+	httpArgs.Auth = http.Flag("auth", "http basic auth username and password, multiple users repeat with -a, such as: -a user1:pass1 -a user2:pass2").Short('a').Strings()
 	httpArgs.PoolSize = http.Flag("pool-size", "conn pool size , which connect to parent proxy, zero: means turn off pool").Short('L').Default("20").Int()
 	httpArgs.CheckParentInterval = http.Flag("check-parent-interval", "check if proxy is okay every interval seconds,zero: means no check").Short('I').Default("3").Int()
 	httpArgs.MagicHeader = http.Flag("magic-header", "used to determine which iface to use to connect to target").Short('h').Default("").String()
 	httpArgs.MappingFile = http.Flag("mapping-file", "used to mapping external IP to internal IP in nat environment").Short('m').Default("").String()
 	httpArgs.AutoMapping = http.Flag("auto-mapping", "mapping external IP to internal IP automatically").Short('M').Default("false").Bool()
 	httpArgs.CheckMappingInterval = http.Flag("check-mapping-interval", "monitor internal IP and update mapping every interval seconds,zero: means no check").Short('c').Default("30").Int()
+	httpArgs.IPResolver = http.Flag("ip-resolver", "ip resolver api, multiple apis repeat with -r, such as: -r ip.sb -r ip-api.com, available: <"+strings.Join(utils.AvailableIPRResolvers(), "|")+">").Default(utils.AvailableIPRResolvers()...).PlaceHolder("ALL").Short('r').Enums(utils.AvailableIPRResolvers()...)
 
 	//########tcp#########
 	tcp := app.Command("tcp", "proxy on tcp mode")
@@ -90,7 +92,7 @@ func initConfig() (err error) {
 	tunnelBridge := app.Command("tbridge", "proxy on tunnel bridge mode")
 	tunnelBridgeArgs.Timeout = tunnelBridge.Flag("timeout", "tcp timeout with milliseconds").Short('t').Default("2000").Int()
 
-	kingpin.MustParse(app.Parse(os.Args[1:]))
+	serviceName := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	if *certTLS != "" && *keyTLS != "" {
 		args.CertBytes, args.KeyBytes = tlsBytes(*certTLS, *keyTLS)
@@ -106,7 +108,6 @@ func initConfig() (err error) {
 
 	poster()
 	//regist services and run service
-	serviceName := kingpin.MustParse(app.Parse(os.Args[1:]))
 	services.Regist("http", services.NewHTTP(), httpArgs)
 	services.Regist("tcp", services.NewTCP(), tcpArgs)
 	services.Regist("udp", services.NewUDP(), udpArgs)

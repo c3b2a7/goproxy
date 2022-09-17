@@ -148,8 +148,8 @@ func ConnectHost(hostAndPort string, timeout int) (conn net.Conn, err error) {
 	return
 }
 
-func ConnectHostWithLAddr(hostAndPort string, laddr string, timeout int) (conn net.Conn, err error) {
-	dialer := newDialer(laddr, time.Duration(timeout)*time.Millisecond)
+func ConnectHostWithLAddr(hostAndPort string, laddr string, timeout time.Duration) (conn net.Conn, err error) {
+	dialer := newDialer(laddr, timeout)
 	return dialer.Dial("tcp", hostAndPort)
 }
 
@@ -320,18 +320,22 @@ func ReadUDPPacket(conn *net.Conn) (srcAddr string, packet []byte, err error) {
 	return
 }
 
-func ResolveMapping(consume func(k, v string)) error {
+func ResolveMapping(ipResolver IPResolver, consume func(k, v string)) error {
 	addrs, err := GetAllInterfaceAddr()
 	if err != nil {
 		return err
 	}
 	for _, addr := range addrs {
-		if !(addr.IsGlobalUnicast() && addr.IsPrivate()) {
+		laddr := addr.String()
+		if !addr.IsGlobalUnicast() {
 			continue
 		}
-		laddr := addr.String()
+		if !addr.IsPrivate() {
+			consume(laddr, laddr)
+			continue
+		}
 		go func() {
-			if ip, err := requestIpInfo(laddr); err == nil {
+			if ip, err := ipResolver.Get(laddr); err == nil {
 				consume(ip, laddr)
 			} else {
 				log.Printf("detect mapping failed, laddr: %s err: %s", laddr, err)
@@ -361,10 +365,10 @@ func UnmarshalMapping(path string, consume func(k, v string)) (err error) {
 	return
 }
 
-func StartMonitor(mapping Mapping, checkInterval int) {
+func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Duration) {
 	go func() {
 		for {
-			time.Sleep(time.Duration(checkInterval) * time.Second)
+			time.Sleep(checkInterval)
 			addrs, _ := GetAllInterfaceAddr()
 			m := make(map[string]string)
 			mapping.Consume(func(k, v string) {
@@ -375,7 +379,7 @@ func StartMonitor(mapping Mapping, checkInterval int) {
 					continue
 				}
 				laddr := addr.String()
-				if newVal, err := requestIpInfo(laddr); err == nil {
+				if newVal, err := ipResolver.Get(laddr); err == nil {
 					oldVal, ok := m[laddr]
 					if newVal != "" && (!ok || oldVal != newVal) {
 						log.Printf("detect new mapping: %s -> %s", laddr, newVal)
@@ -385,32 +389,4 @@ func StartMonitor(mapping Mapping, checkInterval int) {
 			}
 		}
 	}()
-}
-
-func requestIpInfo(laddr string) (string, error) {
-	dialer := newDialer(laddr+":0", time.Duration(3000)*time.Millisecond)
-	transport, _ := http.DefaultTransport.(*http.Transport)
-	transport.DialContext = dialer.DialContext
-	transport.DisableKeepAlives = true
-	request, err := http.NewRequest("GET", "https://api.ip.sb/jsonip", nil)
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36")
-	if err != nil {
-		return "", err
-	}
-	response, err := transport.RoundTrip(request)
-	if err != nil {
-		return "", err
-	}
-	if response.StatusCode != 200 {
-		return "", fmt.Errorf("failed to request ip resovler, response status: %s", response.Status)
-	}
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", err
-	}
-	var ipInfo struct {
-		Ip string `json:"ip"`
-	}
-	json.Unmarshal(data, &ipInfo)
-	return ipInfo.Ip, nil
 }
