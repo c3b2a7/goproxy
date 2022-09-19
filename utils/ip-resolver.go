@@ -92,6 +92,7 @@ func (r CommonIpResolver) Get(ifaceAddr string) (string, error) {
 		return "", fmt.Errorf("%s respond: %s", request.Host, response.Status)
 	}
 	data, err := io.ReadAll(response.Body)
+	defer response.Body.Close()
 	if err != nil {
 		return "", fmt.Errorf("failed to read %s respond body, err: %s", request.Host, err)
 	}
