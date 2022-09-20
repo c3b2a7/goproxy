@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -137,13 +139,30 @@ func newExtractFun(k string) func(map[string]interface{}) (v string) {
 	}
 }
 
-func newTransport(laddr string) *http.Transport {
-	transport, _ := http.DefaultTransport.(*http.Transport)
-	transport.DisableKeepAlives = true
-	if laddr != "" {
-		dialer := newDialer(laddr+":0", time.Duration(3000)*time.Millisecond)
+var transportHolder struct {
+	transportMap map[string]http.RoundTripper
+	sync.Mutex
+	sync.Once
+}
+
+func newTransport(laddr string) http.RoundTripper {
+	transportHolder.Do(func() {
+		transportHolder.transportMap = make(map[string]http.RoundTripper)
+	})
+	transportHolder.Lock()
+	defer transportHolder.Unlock()
+	if transport, ok := transportHolder.transportMap[laddr]; ok {
+		return transport
+	}
+	var transport *http.Transport
+	transport = http.DefaultTransport.(*http.Transport)
+	localAddr, err := net.ResolveTCPAddr("tcp", laddr+":0")
+	if laddr != "" && err == nil {
+		transport = transport.Clone()
+		dialer := newDialer(localAddr, time.Duration(3000)*time.Millisecond)
 		transport.DialContext = dialer.DialContext
 	}
+	transportHolder.transportMap[laddr] = transport
 	return transport
 }
 

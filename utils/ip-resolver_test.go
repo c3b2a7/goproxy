@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/stretchr/testify/assert"
+	"sync"
 	"testing"
 )
 
@@ -14,6 +15,44 @@ func TestCommonIpResolver_Get(t *testing.T) {
 			assert.NotEmptyf(t, addr, "test %s failed", test)
 		})
 	}
+}
+
+func TestTransport(t *testing.T) {
+	resolver := PickIPResolver("ip.sb")
+	var wg sync.WaitGroup
+
+	do := func(ifaceAddr string) {
+		go func() {
+			resolver.Get(ifaceAddr)
+			wg.Done()
+		}()
+	}
+
+	assert.Exactly(t, 0, len(transportHolder.transportMap))
+
+	wg.Add(1)
+	do("")
+	wg.Wait()
+	// default transport
+	assert.Exactly(t, len(transportHolder.transportMap), 1)
+
+	wg.Add(1)
+	do("127.0.0.1")
+	wg.Wait()
+	// default transport + 127.0.0.1
+	assert.Exactly(t, 2, len(transportHolder.transportMap))
+
+	wg.Add(1)
+	do("192.168.15.141")
+	wg.Wait()
+	// default transport + 127.0.0.1 + 192.168.15.141
+	assert.Exactly(t, 3, len(transportHolder.transportMap))
+
+	wg.Add(1)
+	do("")
+	wg.Wait()
+	// default transport + 127.0.0.1 + 192.168.15.141
+	assert.Exactly(t, len(transportHolder.transportMap), 3)
 }
 
 func TestNewFallBackIPResolver(t *testing.T) {

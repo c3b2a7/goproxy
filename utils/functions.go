@@ -149,12 +149,12 @@ func ConnectHost(hostAndPort string, timeout int) (conn net.Conn, err error) {
 }
 
 func ConnectHostWithLAddr(hostAndPort string, laddr string, timeout time.Duration) (conn net.Conn, err error) {
-	dialer := newDialer(laddr, timeout)
+	localAddr, _ := net.ResolveTCPAddr("tcp", laddr)
+	dialer := newDialer(localAddr, timeout)
 	return dialer.Dial("tcp", hostAndPort)
 }
 
-func newDialer(laddr string, timeout time.Duration) *net.Dialer {
-	localAddr, _ := net.ResolveTCPAddr("tcp", laddr)
+func newDialer(localAddr net.Addr, timeout time.Duration) *net.Dialer {
 	return &net.Dialer{
 		Timeout:   timeout,
 		LocalAddr: localAddr,
