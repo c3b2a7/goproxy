@@ -15,26 +15,32 @@ var resolvers = []IPResolver{
 	// see https://ip.sb/api
 	&CommonIpResolver{
 		name:       "ip.sb",
-		newRequest: newRequest("GET", "https://api.ip.sb/jsonip", nil, map[string]string{"User-Agent": "Mozilla/5.0"}),
+		newRequest: newRequest("GET", "https://api.ip.sb/jsonip", map[string]string{"User-Agent": "Mozilla/5.0"}),
+		extractFun: newExtractFun("ip"),
+	},
+	// see https://www.ipify.org
+	&CommonIpResolver{
+		name:       "ipify.org",
+		newRequest: newRequest("GET", "https://api.ipify.org?format=json", nil),
 		extractFun: newExtractFun("ip"),
 	},
 	// see https://ipinfo.io/developers
 	&CommonIpResolver{
 		name:       "ipinfo.io",
-		newRequest: newRequest("GET", "https://ipinfo.io/json", nil, nil),
+		newRequest: newRequest("GET", "https://ipinfo.io/json", nil),
 		extractFun: newExtractFun("ip"),
 	},
 	// see https://ip-api.com/docs/api:json
 	&CommonIpResolver{
 		name:       "ip-api.com",
-		newRequest: newRequest("GET", "http://ip-api.com/json", nil, nil),
+		newRequest: newRequest("GET", "http://ip-api.com/json", nil),
 		extractFun: newExtractFun("query"),
 	},
-	// see https://ipapi.co/api
+	// see https://www.bigdatacloud.com/docs/api/public-ip-address-api
 	&CommonIpResolver{
-		name:       "ipapi.co",
-		newRequest: newRequest("GET", "https://ipapi.co/json", nil, nil),
-		extractFun: newExtractFun("ip"),
+		name:       "bigdatacloud.net",
+		newRequest: newRequest("GET", "https://api.bigdatacloud.net/data/client-ip", nil),
+		extractFun: newExtractFun("ipString"),
 	},
 }
 
@@ -116,8 +122,8 @@ func (r CommonIpResolver) String() string {
 	return r.Name()
 }
 
-func newRequest(method, url string, body io.Reader, header map[string]string) func() (*http.Request, error) {
-	request, err := http.NewRequest(method, url, body)
+func newRequest(method, url string, header map[string]string) func() (*http.Request, error) {
+	request, err := http.NewRequest(method, url, nil)
 	fun := func() (*http.Request, error) {
 		return request, err
 	}
