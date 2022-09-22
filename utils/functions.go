@@ -382,7 +382,7 @@ func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Dur
 				if newVal, err := ipResolver.Get(laddr); err == nil {
 					oldVal, ok := m[laddr]
 					if newVal != "" && (!ok || oldVal != newVal) {
-						log.Printf("detect new mapping: %s -> %s", laddr, newVal)
+						log.Printf("detect new mapping: %s -> %s", newVal, laddr)
 						mapping.Put(newVal, laddr)
 					}
 				}
