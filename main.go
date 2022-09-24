@@ -3,29 +3,30 @@ package main
 import (
 	"fmt"
 	"github.com/c3b2a7/goproxy/services"
-	"log"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
+var (
+	app     *kingpin.Application
+	service *services.ServiceItem
+)
+
 func main() {
 	err := initConfig()
 	if err != nil {
-		log.Fatalf("err : %s", err)
+		fmt.Printf("[-] Error: %s\n", err)
 	}
-	Clean(&service.S)
-}
-func Clean(s *services.Service) {
+
 	signalChan := make(chan os.Signal, 1)
-	cleanupDone := make(chan bool)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		for _ = range signalChan {
-			fmt.Println("\nReceived an interrupt, stopping services...")
-			(*s).Clean()
-			cleanupDone <- true
-		}
-	}()
-	<-cleanupDone
+	<-signalChan
+
+	if service != nil {
+		fmt.Printf("\n[*] Received an interrupt, stopping services...\n")
+		service.S.Clean()
+	}
+	KillSubProcess()
 }
