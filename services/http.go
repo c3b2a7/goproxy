@@ -154,6 +154,8 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			if laddr, _ = req.GetHeader(*s.cfg.MagicHeader); laddr != "" {
 				req.DelHeader(*s.cfg.MagicHeader)
 				laddr = s.mapping.Get(laddr)
+			} else {
+				return fmt.Errorf("not found %s in request headers", *s.cfg.MagicHeader)
 			}
 		}
 		if laddr != "" {
