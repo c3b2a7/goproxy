@@ -103,7 +103,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 	req, err := utils.NewHTTPRequest(&inConn, 4096, s.IsBasicAuth(), &s.basicAuth)
 	if err != nil {
 		if err != io.EOF {
-			log.Printf("decoder error , form %s, ERR:%s", err, inConn.RemoteAddr())
+			log.Printf("decoder error, form %s, ERR:%s", inConn.RemoteAddr(), err)
 		}
 		utils.CloseConn(&inConn)
 		return
