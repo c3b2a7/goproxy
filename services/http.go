@@ -14,7 +14,7 @@ import (
 const (
 	proxyConnection    = "Proxy-Connection"
 	proxyAuthenticate  = "Proxy-Authenticate"
-	proxyAuthorization = "Proxy-Authenticate"
+	proxyAuthorization = "Proxy-Authorization"
 )
 
 type HTTP struct {
