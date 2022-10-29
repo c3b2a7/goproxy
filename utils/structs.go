@@ -401,6 +401,32 @@ func (req *HTTPRequest) addPortIfNot() (newHost string) {
 	return
 }
 
+const (
+	proxyConnection    = "Proxy-Connection"
+	proxyAuthenticate  = "Proxy-Authenticate"
+	proxyAuthorization = "Proxy-Authorization"
+	connection         = "Connection"
+	keepAlive          = "Keep-Alive"
+	TE                 = "TE"
+	Trailers           = "Trailer"           // note: actual header name is Trailer
+	TransferEncoding   = "Transfer-Encoding" // note: this header is not normally removed when proxying, since the proxy does not re-chunk responses.
+	Upgrade            = "Upgrade"
+)
+
+// hop-by-hop headers should remove
+// https://datatracker.ietf.org/doc/html/rfc2616#section-13.5.1
+// https://datatracker.ietf.org/doc/html/rfc9110#section-7.6.1
+var hopByHopHeaders = []string{
+	proxyConnection, proxyAuthenticate, proxyAuthorization,
+	//connection, keepAlive, TE, Trailers, Upgrade,
+}
+
+func (req *HTTPRequest) RemoveHopByHopHeaders() {
+	for _, header := range hopByHopHeaders {
+		req.DelHeader(header)
+	}
+}
+
 type OutPool struct {
 	Pool      ConnPool
 	dur       int

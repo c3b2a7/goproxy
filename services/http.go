@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-const (
-	proxyConnection    = "Proxy-Connection"
-	proxyAuthenticate  = "Proxy-Authenticate"
-	proxyAuthorization = "Proxy-Authorization"
-)
-
 type HTTP struct {
 	cfg        HTTPArgs
 	outPool    utils.OutPool
@@ -175,9 +169,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	if req.IsHTTPS() && !useProxy {
 		req.HTTPSReply()
 	} else {
-		req.DelHeader(proxyConnection)
-		req.DelHeader(proxyAuthenticate)
-		req.DelHeader(proxyAuthorization)
+		req.RemoveHopByHopHeaders()
 		outConn.Write(req.HeadBuf)
 	}
 	utils.IoBind(*inConn, outConn, func(isSrcErr bool, err error) {
