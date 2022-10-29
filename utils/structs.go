@@ -511,37 +511,55 @@ func (op *OutPool) initPoolDeamon() {
 type Mapping interface {
 	Get(string) string
 	Put(string, string)
-	Consume(func(k, v string))
+	Remove(string)
+	Iter(func(string, string) bool)
 }
 
 type inMemoryMapping struct {
-	mapping map[string]string
-	sync.RWMutex
+	mapping sync.Map // outbound -> ifaceAddr
 }
 
 func NewInMemoryMapping() Mapping {
-	return &inMemoryMapping{
-		mapping: make(map[string]string),
-	}
+	return &inMemoryMapping{}
 }
 
 func (m *inMemoryMapping) Get(key string) string {
-	m.RLock()
-	defer m.RUnlock()
-	if val, ok := m.mapping[key]; ok {
-		return val
+	if val, ok := m.mapping.Load(key); ok {
+		return val.(string)
 	}
 	return ""
 }
 
 func (m *inMemoryMapping) Put(key string, val string) {
-	m.Lock()
-	defer m.Unlock()
-	m.mapping[key] = val
+	m.mapping.Store(key, val)
 }
 
-func (m *inMemoryMapping) Consume(f func(k, v string)) {
-	for k, v := range m.mapping {
-		f(k, v)
+func (m *inMemoryMapping) Remove(key string) {
+	m.mapping.Delete(key)
+}
+
+func (m *inMemoryMapping) Iter(f func(key, val string) bool) {
+	m.mapping.Range(func(key, value any) bool {
+		return f(key.(string), value.(string))
+	})
+}
+
+// PBMapping supports public ip address mapping even if mapping is empty
+type PBMapping struct {
+	Mapping
+}
+
+func (m *PBMapping) Get(key string) string {
+	if ret := m.Mapping.Get(key); ret != "" {
+		return ret
 	}
+	if m.isPublic(key) {
+		return key
+	}
+	return ""
+}
+
+func (m *PBMapping) isPublic(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && ip.IsGlobalUnicast() && !ip.IsPrivate()
 }

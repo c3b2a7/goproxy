@@ -165,7 +165,8 @@ func newTransport(laddr string) http.RoundTripper {
 	localAddr, err := net.ResolveTCPAddr("tcp", laddr+":0")
 	if laddr != "" && err == nil {
 		transport = transport.Clone()
-		dialer := newDialer(localAddr, time.Duration(3000)*time.Millisecond)
+		transport.DisableKeepAlives = true
+		dialer := newDialer(localAddr, time.Duration(2000)*time.Millisecond)
 		transport.DialContext = dialer.DialContext
 	}
 	transportHolder.transportMap[laddr] = transport

@@ -330,10 +330,6 @@ func ResolveMapping(ipResolver IPResolver, consume func(k, v string)) error {
 		if !addr.IsGlobalUnicast() {
 			continue
 		}
-		if !addr.IsPrivate() {
-			consume(laddr, laddr)
-			continue
-		}
 		go func() {
 			if ip, err := ipResolver.Get(laddr); err == nil {
 				consume(ip, laddr)
@@ -365,28 +361,58 @@ func UnmarshalMapping(path string, consume func(k, v string)) (err error) {
 	return
 }
 
+var (
+	monitorOnce        = new(sync.Once)
+	failedCountMap     = make(map[string]int)
+	MaximumFailedCount = 3
+)
+
 func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Duration) {
-	go func() {
-		for {
-			time.Sleep(checkInterval)
-			addrs, _ := GetAllInterfaceAddr()
-			m := make(map[string]string)
-			mapping.Consume(func(k, v string) {
-				m[v] = k
-			})
-			for _, addr := range addrs {
-				if !(addr.IsGlobalUnicast() && addr.IsPrivate()) {
-					continue
-				}
-				laddr := addr.String()
-				if newVal, err := ipResolver.Get(laddr); err == nil {
-					oldVal, ok := m[laddr]
-					if newVal != "" && (!ok || oldVal != newVal) {
-						log.Printf("detect new mapping: %s -> %s", newVal, laddr)
-						mapping.Put(newVal, laddr)
+	monitorOnce.Do(func() {
+		go func() {
+			for {
+				time.Sleep(checkInterval)
+				addrs, _ := GetAllInterfaceAddr()
+				ifaceAddrs := make(map[string]string)
+				for _, addr := range addrs {
+					if !addr.IsGlobalUnicast() {
+						continue
 					}
+					laddr, outbound := addr.String(), ""
+					mapping.Iter(func(k, v string) bool {
+						if v == laddr {
+							outbound = k
+							return false
+						}
+						return true
+					})
+					ifaceAddrs[laddr] = outbound
+				}
+				mapping.Iter(func(k, v string) (ok bool) {
+					if _, ok = ifaceAddrs[v]; !ok {
+						mapping.Remove(k)
+					}
+					return
+				})
+				for ifaceAddr, oldOutbound := range ifaceAddrs {
+					go func(ifaceAddr, oldOutbound string) {
+						if newOutbound, err := ipResolver.Get(ifaceAddr); err == nil {
+							delete(failedCountMap, ifaceAddr)
+							if newOutbound != "" && (newOutbound != oldOutbound) {
+								log.Printf("detect new mapping: %s -> %s", ifaceAddr, newOutbound)
+								mapping.Remove(oldOutbound)
+								mapping.Put(newOutbound, ifaceAddr)
+							}
+						} else {
+							failedCountMap[ifaceAddr]++
+							if failedCountMap[ifaceAddr] >= MaximumFailedCount {
+								delete(failedCountMap, ifaceAddr)
+								mapping.Remove(oldOutbound)
+							}
+						}
+					}(ifaceAddr, oldOutbound)
 				}
 			}
-		}
-	}()
+		}()
+	})
 }
