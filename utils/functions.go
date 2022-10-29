@@ -365,28 +365,57 @@ func UnmarshalMapping(path string, consume func(k, v string)) (err error) {
 	return
 }
 
+var (
+	monitorOnce        = new(sync.Once)
+	failedCountMap     = make(map[string]int)
+	MaximumFailedCount = 3
+)
+
 func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Duration) {
-	go func() {
-		for {
-			time.Sleep(checkInterval)
-			addrs, _ := GetAllInterfaceAddr()
-			m := make(map[string]string)
-			mapping.Consume(func(k, v string) {
-				m[v] = k
-			})
-			for _, addr := range addrs {
-				if !(addr.IsGlobalUnicast() && addr.IsPrivate()) {
-					continue
+	monitorOnce.Do(func() {
+		go func() {
+			for {
+				time.Sleep(checkInterval)
+				addrs, _ := GetAllInterfaceAddr()
+				ifaceAddrs := make(map[string]string)
+				for _, addr := range addrs {
+					if !(addr.IsGlobalUnicast() && addr.IsPrivate()) {
+						continue
+					}
+					var outbound string
+					mapping.Consume(func(k, v string, remove func()) {
+						if v == addr.String() {
+							outbound = k
+						}
+					})
+					ifaceAddrs[addr.String()] = outbound
 				}
-				laddr := addr.String()
-				if newVal, err := ipResolver.Get(laddr); err == nil {
-					oldVal, ok := m[laddr]
-					if newVal != "" && (!ok || oldVal != newVal) {
-						log.Printf("detect new mapping: %s -> %s", newVal, laddr)
-						mapping.Put(newVal, laddr)
+				// 删除已经down的网卡的映射
+				mapping.Consume(func(k, v string, remove func()) {
+					if _, ok := ifaceAddrs[v]; !ok {
+						remove()
+					}
+				})
+				for ifaceAddr, oldOutbound := range ifaceAddrs {
+					if newOutbound, err := ipResolver.Get(ifaceAddr); err == nil {
+						delete(failedCountMap, ifaceAddr)
+						if newOutbound != "" && (newOutbound != oldOutbound) {
+							log.Printf("detect new mapping: %s -> %s", ifaceAddr, newOutbound)
+							mapping.Put(newOutbound, ifaceAddr)
+						}
+					} else {
+						failedCountMap[ifaceAddr]++
+						if failedCountMap[ifaceAddr] >= MaximumFailedCount {
+							delete(failedCountMap, ifaceAddr)
+							mapping.Consume(func(k, v string, remove func()) {
+								if v == ifaceAddr {
+									remove()
+								}
+							})
+						}
 					}
 				}
 			}
-		}
-	}()
+		}()
+	})
 }

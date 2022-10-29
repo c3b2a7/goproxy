@@ -481,11 +481,11 @@ func (op *OutPool) initPoolDeamon() {
 type Mapping interface {
 	Get(string) string
 	Put(string, string)
-	Consume(func(k, v string))
+	Consume(func(k, v string, remove func()))
 }
 
 type inMemoryMapping struct {
-	mapping map[string]string
+	mapping map[string]string // outbound -> ifaceAddr
 	sync.RWMutex
 }
 
@@ -510,8 +510,29 @@ func (m *inMemoryMapping) Put(key string, val string) {
 	m.mapping[key] = val
 }
 
-func (m *inMemoryMapping) Consume(f func(k, v string)) {
+func (m *inMemoryMapping) Consume(f func(k, v string, remove func())) {
 	for k, v := range m.mapping {
-		f(k, v)
+		f(k, v, func() {
+			m.Lock()
+			defer m.Unlock()
+			delete(m.mapping, k)
+		})
 	}
+}
+
+// PBMemoryMapping supports public ip address mapping even if mapping is empty
+type PBMemoryMapping struct {
+	inMemoryMapping
+}
+
+func (m *PBMemoryMapping) Get(key string) string {
+	if m.isPublic(key) {
+		return key
+	}
+	return m.inMemoryMapping.Get(key)
+}
+
+func (m *PBMemoryMapping) isPublic(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && ip.IsGlobalUnicast() && !ip.IsPrivate()
 }

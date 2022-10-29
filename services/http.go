@@ -46,7 +46,7 @@ func (s *HTTP) InitMapping() {
 	s.ipResolver, _ = utils.NewFallBackIPResolver(*s.cfg.IPResolver...)
 	logMapping := func(k, v string) {
 		s.mapping.Put(k, v)
-		log.Printf("detect mapping: %s -> %s", k, v)
+		log.Printf("detect mapping: %s -> %s", v, k)
 	}
 	if *s.cfg.AutoMapping {
 		utils.ResolveMapping(s.ipResolver, logMapping)
@@ -151,9 +151,11 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	} else {
 		var laddr string
 		if *s.cfg.MagicHeader != "" {
-			if laddr, _ = req.GetHeader(*s.cfg.MagicHeader); laddr != "" {
+			if outbound, _ := req.GetHeader(*s.cfg.MagicHeader); outbound != "" {
 				req.DelHeader(*s.cfg.MagicHeader)
-				laddr = s.mapping.Get(laddr)
+				if laddr = s.mapping.Get(outbound); laddr == "" {
+					return fmt.Errorf("no mapping for outbound: %s", outbound)
+				}
 			} else {
 				return fmt.Errorf("not found %s in request headers", *s.cfg.MagicHeader)
 			}
@@ -181,7 +183,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		outConn.Write(req.HeadBuf)
 	}
 	utils.IoBind(*inConn, outConn, func(isSrcErr bool, err error) {
-		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
+		log.Printf("conn %s - %s - %s - %s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
 	}, func(n int, d bool) {}, 0)
