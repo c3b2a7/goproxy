@@ -289,10 +289,14 @@ func (req *HTTPRequest) HTTP() (err error) {
 		u, _ := url.Parse(req.URL)
 		req.Host = u.Host
 		req.addPortIfNot()
-	}
-	cut := []byte("http://" + req.Host)
-	if index := bytes.Index(req.HeadBuf, cut); index != -1 {
-		req.HeadBuf = append(req.HeadBuf[:index], req.HeadBuf[index+len(cut):]...)
+		var scheme = u.Scheme
+		if strings.HasPrefix(req.URL, "HTTP://") {
+			scheme = "HTTP://"
+		}
+		cut := []byte(scheme + u.Host)
+		if index := bytes.Index(req.HeadBuf, cut); index != -1 {
+			req.HeadBuf = append(req.HeadBuf[:index], req.HeadBuf[index+len(cut):]...)
+		}
 	}
 	return
 }
@@ -395,6 +399,32 @@ func (req *HTTPRequest) addPortIfNot() (newHost string) {
 		req.Host = req.Host + ":" + port
 	}
 	return
+}
+
+const (
+	proxyConnection    = "Proxy-Connection"
+	proxyAuthenticate  = "Proxy-Authenticate"
+	proxyAuthorization = "Proxy-Authorization"
+	connection         = "Connection"
+	keepAlive          = "Keep-Alive"
+	TE                 = "TE"
+	Trailers           = "Trailer"           // note: actual header name is Trailer
+	TransferEncoding   = "Transfer-Encoding" // note: this header is not normally removed when proxying, since the proxy does not re-chunk responses.
+	Upgrade            = "Upgrade"
+)
+
+// hop-by-hop headers should remove
+// https://datatracker.ietf.org/doc/html/rfc2616#section-13.5.1
+// https://datatracker.ietf.org/doc/html/rfc9110#section-7.6.1
+var hopByHopHeaders = []string{
+	proxyConnection, proxyAuthenticate, proxyAuthorization,
+	//connection, keepAlive, TE, Trailers, Upgrade,
+}
+
+func (req *HTTPRequest) RemoveHopByHopHeaders() {
+	for _, header := range hopByHopHeaders {
+		req.DelHeader(header)
+	}
 }
 
 type OutPool struct {
