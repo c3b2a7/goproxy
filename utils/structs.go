@@ -289,10 +289,14 @@ func (req *HTTPRequest) HTTP() (err error) {
 		u, _ := url.Parse(req.URL)
 		req.Host = u.Host
 		req.addPortIfNot()
-	}
-	cut := []byte("http://" + req.Host)
-	if index := bytes.Index(req.HeadBuf, cut); index != -1 {
-		req.HeadBuf = append(req.HeadBuf[:index], req.HeadBuf[index+len(cut):]...)
+		var scheme = u.Scheme
+		if strings.HasPrefix(req.URL, "HTTP://") {
+			scheme = "HTTP://"
+		}
+		cut := []byte(scheme + u.Host)
+		if index := bytes.Index(req.HeadBuf, cut); index != -1 {
+			req.HeadBuf = append(req.HeadBuf[:index], req.HeadBuf[index+len(cut):]...)
+		}
 	}
 	return
 }
