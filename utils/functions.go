@@ -363,7 +363,7 @@ func UnmarshalMapping(path string, consume func(k, v string)) (err error) {
 
 var (
 	monitorOnce        = new(sync.Once)
-	failedCountMap     = make(map[string]int)
+	failedCountMap     = new(sync.Map)
 	MaximumFailedCount = 3
 )
 
@@ -397,16 +397,22 @@ func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Dur
 				for ifaceAddr, oldOutbound := range ifaceAddrs {
 					go func(ifaceAddr, oldOutbound string) {
 						if newOutbound, err := ipResolver.Get(ifaceAddr); err == nil {
-							delete(failedCountMap, ifaceAddr)
+							failedCountMap.Delete(ifaceAddr)
 							if newOutbound != "" && (newOutbound != oldOutbound) {
 								log.Printf("detect new mapping: %s -> %s", ifaceAddr, newOutbound)
 								mapping.Remove(oldOutbound)
 								mapping.Put(newOutbound, ifaceAddr)
 							}
 						} else {
-							failedCountMap[ifaceAddr]++
-							if failedCountMap[ifaceAddr] >= MaximumFailedCount {
-								delete(failedCountMap, ifaceAddr)
+							var newCount int
+							if count, ok := failedCountMap.Load(ifaceAddr); !ok {
+								newCount = 1
+							} else {
+								newCount = count.(int) + 1
+							}
+							failedCountMap.Store(ifaceAddr, newCount)
+							if newCount >= MaximumFailedCount {
+								failedCountMap.Delete(ifaceAddr)
 								mapping.Remove(oldOutbound)
 							}
 						}
