@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/c3b2a7/goproxy/common/process"
 	"github.com/c3b2a7/goproxy/services"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"os"
@@ -28,5 +29,5 @@ func main() {
 		fmt.Printf("\n[*] Received an interrupt, stopping services...\n")
 		service.S.Clean()
 	}
-	KillSubProcess()
+	process.Kill()
 }

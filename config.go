@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/c3b2a7/goproxy/common/process"
 	. "github.com/c3b2a7/goproxy/constant"
 	"github.com/c3b2a7/goproxy/services"
 	"github.com/c3b2a7/goproxy/utils"
@@ -91,38 +92,37 @@ func initConfig() (err error) {
 	tunnelBridgeArgs.Timeout = tunnelBridge.Flag("timeout", "tcp timeout with milliseconds").Short('t').Default("2000").Int()
 
 	serviceName := kingpin.MustParse(app.Parse(os.Args[1:]))
-	if ForkSubProcess(*daemon, *forever) {
-		return
-	}
 
-	if *certTLS != "" && *keyTLS != "" {
-		args.CertBytes, args.KeyBytes, err = tlsBytes(*certTLS, *keyTLS)
-		if err != nil {
-			return
+	return process.Start(*daemon, *forever, func() (err error) {
+		if *certTLS != "" && *keyTLS != "" {
+			args.CertBytes, args.KeyBytes, err = tlsBytes(*certTLS, *keyTLS)
+			if err != nil {
+				return
+			}
 		}
-	}
 
-	//common args
-	httpArgs.Args = args
-	tcpArgs.Args = args
-	udpArgs.Args = args
-	tunnelBridgeArgs.Args = args
-	tunnelClientArgs.Args = args
-	tunnelServerArgs.Args = args
+		//common args
+		httpArgs.Args = args
+		tcpArgs.Args = args
+		udpArgs.Args = args
+		tunnelBridgeArgs.Args = args
+		tunnelClientArgs.Args = args
+		tunnelServerArgs.Args = args
 
-	poster()
-	//regist services and run service
-	services.Regist("http", services.NewHTTP(), httpArgs)
-	services.Regist("tcp", services.NewTCP(), tcpArgs)
-	services.Regist("udp", services.NewUDP(), udpArgs)
-	services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
-	services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
-	services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
-	service, err = services.Run(serviceName)
-	if err != nil {
-		return fmt.Errorf("run service [%s] failed, cause: %s", service, err)
-	}
-	return
+		poster()
+		//regist services and run service
+		services.Regist("http", services.NewHTTP(), httpArgs)
+		services.Regist("tcp", services.NewTCP(), tcpArgs)
+		services.Regist("udp", services.NewUDP(), udpArgs)
+		services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
+		services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
+		services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
+		service, err = services.Run(serviceName)
+		if err != nil {
+			return fmt.Errorf("run service [%s] failed, cause: %s", service, err)
+		}
+		return
+	})
 }
 
 func poster() {
