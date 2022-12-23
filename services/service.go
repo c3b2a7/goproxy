@@ -18,7 +18,7 @@ type ServiceItem struct {
 
 var servicesMap = map[string]*ServiceItem{}
 
-func Regist(name string, s Service, args interface{}) {
+func Register(name string, s Service, args interface{}) {
 	servicesMap[name] = &ServiceItem{
 		S:    s,
 		Args: args,
