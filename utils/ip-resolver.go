@@ -151,6 +151,10 @@ var transportHolder struct {
 	sync.Once
 }
 
+func GetTransport(laddr string) http.RoundTripper {
+	return newTransport(laddr)
+}
+
 func newTransport(laddr string) http.RoundTripper {
 	transportHolder.Do(func() {
 		transportHolder.transportMap = make(map[string]http.RoundTripper)

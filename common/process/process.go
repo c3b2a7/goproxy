@@ -1,4 +1,4 @@
-package main
+package process
 
 import (
 	"fmt"
@@ -11,36 +11,43 @@ import (
 
 var (
 	subProcess *exec.Cmd
-	extCh      = make(chan struct{})
+	exitCh     = make(chan struct{})
 )
 
-func ForkSubProcess(daemon, forever bool) bool {
+func Start(daemon, forever bool, startService func() error) error {
 	if daemon {
 		fmt.Printf("[*] Daemon running in PID: %d PPID: %d\n", os.Getpid(), os.Getppid())
 		fork(stripSlice(os.Args, "--daemon"), os.Stdout, os.Stderr)
 		os.Exit(0)
-		return true
 	} else if forever {
 		fmt.Printf("[*] Forever running in PID: %d PPID: %d\n", os.Getpid(), os.Getppid())
 		go func() {
 			for {
 				subProcess = fork(stripSlice(os.Args, "--forever"), os.Stdout, os.Stderr)
 				subProcess.Wait()
-				timeout := time.After(1 * time.Second)
 				select {
-				case <-timeout:
-				case <-extCh:
+				case <-exitCh:
 					return
+				default:
 				}
 			}
 		}()
-		return true
+	} else {
+		fmt.Printf("[*] Service running in PID: %d PPID: %d ARG: %s\n", os.Getpid(), os.Getppid(), os.Args)
+		return startService()
 	}
-	fmt.Printf("[*] Service running in PID: %d PPID: %d ARG: %s\n", os.Getpid(), os.Getppid(), os.Args)
-	return false
+	return nil
 }
 
-func KillSubProcess() {
+func Restart() {
+	rescheduleSubProcess(false)
+}
+
+func Kill() {
+	rescheduleSubProcess(true)
+}
+
+func rescheduleSubProcess(exit bool) {
 	if subProcess != nil {
 		waitCh := make(chan struct{})
 		go func() {
@@ -48,13 +55,13 @@ func KillSubProcess() {
 			close(waitCh)
 		}()
 
-		close(extCh)
+		if exit {
+			close(exitCh)
+		}
 		subProcess.Process.Signal(syscall.SIGTERM)
-
-		timeout := time.After(3 * time.Second)
 		select {
 		case <-waitCh:
-		case <-timeout:
+		case <-time.After(3 * time.Second):
 			subProcess.Process.Kill()
 		}
 	}

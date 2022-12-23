@@ -335,6 +335,15 @@ func ResolveMapping(ipResolver IPResolver, consume func(k, v string)) error {
 				consume(ip, laddr)
 			} else {
 				log.Printf("detect mapping failed, laddr: %s err: %s", laddr, err)
+				var newCount int
+				if count, ok := failedCountMap.Load(laddr); !ok {
+					newCount = 1
+				} else {
+					newCount = count.(int) + 1
+				}
+				if !(newCount >= MaximumFailedCount) {
+					failedCountMap.Store(laddr, newCount)
+				}
 			}
 		}()
 	}
@@ -410,10 +419,10 @@ func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Dur
 							} else {
 								newCount = count.(int) + 1
 							}
-							failedCountMap.Store(ifaceAddr, newCount)
 							if newCount >= MaximumFailedCount {
-								failedCountMap.Delete(ifaceAddr)
 								mapping.Remove(oldOutbound)
+							} else {
+								failedCountMap.Store(ifaceAddr, newCount)
 							}
 						}
 					}(ifaceAddr, oldOutbound)
@@ -421,4 +430,19 @@ func StartMonitor(ipResolver IPResolver, mapping Mapping, checkInterval time.Dur
 			}
 		}()
 	})
+}
+
+func GetAvailableIfaceAddr() string {
+	addrs, _ := GetAllInterfaceAddr()
+	for _, addr := range addrs {
+		if !addr.IsGlobalUnicast() {
+			continue
+		}
+		laddr := addr.String()
+		if _, ok := failedCountMap.Load(laddr); ok {
+			continue
+		}
+		return laddr
+	}
+	return ""
 }
