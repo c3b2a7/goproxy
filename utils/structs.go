@@ -286,7 +286,10 @@ func (req *HTTPRequest) HTTP() (err error) {
 	}
 	req.URL, err = req.getHTTPURL()
 	if err == nil {
-		u, _ := url.Parse(req.URL)
+		var u *url.URL
+		if u, err = url.Parse(req.URL); err != nil {
+			return
+		}
 		req.Host = u.Host
 		req.addPortIfNot()
 		var scheme = u.Scheme
