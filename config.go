@@ -35,6 +35,7 @@ func initConfig() (err error) {
 
 	daemon := app.Flag("daemon", "run in daemon").Default("false").Bool()
 	forever := app.Flag("forever", "run in forever").Default("false").Bool()
+	doNotUpdate := app.Flag("do-not-update", "do not automatic update").Bool()
 
 	args.Parent = app.Flag("parent", "parent address, such as: \"23.32.32.19:28008\"").Default("").Short('P').String()
 	args.Local = app.Flag("local", "local ip:port to listen").Short('p').Default(":33080").String()
@@ -124,11 +125,13 @@ func initConfig() (err error) {
 		}
 
 		// start automatic update service
-		hotupdate.StartService(func(newVersion string) {
-			fmt.Printf("\n[*] New version(%s) avaliable, restart services for update...\n", newVersion)
-			service.S.Clean()
-			os.Exit(0)
-		})
+		if !*doNotUpdate {
+			hotupdate.StartService(func(newVersion string) {
+				fmt.Printf("\n[*] New version(%s) avaliable, restart services for update...\n", newVersion)
+				service.S.Clean()
+				os.Exit(0)
+			})
+		}
 		return
 	})
 }
