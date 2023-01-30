@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	latestVersion = "https://download.hitoor.com/goproxy/test/LatestVersion"
-	downloadURL   = "https://download.hitoor.com/goproxy/test/proxy-" + runtime.GOOS + "-" + runtime.GOARCH + ".tar.gz"
+	latestVersion = "https://download.hitoor.com/goproxy/LatestVersion"
+	downloadURL   = "https://download.hitoor.com/goproxy/proxy-" + runtime.GOOS + "-" + runtime.GOARCH + ".tar.gz"
 )
 
 var (
